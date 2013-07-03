@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"math"
 	"os"
 	"path/filepath"
 )
@@ -31,12 +30,12 @@ func NewRolling(init []byte) *RollingSum {
 	rs := &RollingSum{
 		size:   uint(len(init)),
 		window: init,
-		m:      math.MaxUint16,
+		m:      1 << 16,
 	}
 
 	for i, c := range init {
 		rs.a += uint(c)
-		rs.b += (uint(len(init)) - uint(i) + 1) * uint(c)
+		rs.b += (rs.size - uint(i) + 1) * uint(c)
 	}
 	rs.a = rs.a % rs.m
 	rs.b = rs.b % rs.m
@@ -52,7 +51,7 @@ func (rs *RollingSum) Write(data []byte) (n int, err error) {
 }
 
 func (rs *RollingSum) WriteByte(c byte) error {
-	rs.a = rs.a - uint(rs.window[0]) + uint(c)%rs.m
+	rs.a = (rs.a - uint(rs.window[0]) + uint(c)) % rs.m
 	rs.b = (rs.b - (rs.size+1)*uint(rs.window[0]) + rs.a) % rs.m
 
 	rs.window = append(rs.window, c)
@@ -65,8 +64,9 @@ func (rs *RollingSum) Sum32() uint32 {
 }
 
 var (
-	window int64  = 10
-	target uint32 = 1 << 18
+	window int64  = 256
+	blockSize uint32 = 4096
+	target uint32 = (1 << 32 - 1) / blockSize
 )
 
 func Archive(ch chan Chunk, dst, name string) error {

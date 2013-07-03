@@ -2,16 +2,18 @@ package rbup
 
 import (
 	"testing"
+	"crypto/rand"
 )
 
 func TestRollingSum(t *testing.T) {
-	data := []byte("four score and seven years ago I started eating much food and it was so delicious")
+	data := make([]byte, 280)
+	rand.Read(data)
 
-	rs := NewRolling(data[:32])
-	for i, c := range data[32:] {
+	rs := NewRolling(data[:256])
+	for i, c := range data[256:] {
 		rs.WriteByte(c)
 		rs.Sum32()
-		t.Logf("sum to %v: %v", i, rs.Sum32())
+		t.Logf("sum to %v: %v, ratio=%v", i, rs.Sum32(), float64(rs.Sum32()) / float64(1 << 32))
 	}
 }
 
