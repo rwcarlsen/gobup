@@ -135,7 +135,7 @@ func Split(r io.Reader, ch chan []byte) (err error) {
 		data = append(data, c)
 		if h.WriteByte(c); h.Sum32() < target {
 			ch <- data
-			data = []byte{}
+			data = make([]byte, 0)
 		}
 	}
 
