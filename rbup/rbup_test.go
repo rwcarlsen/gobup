@@ -1,34 +1,38 @@
 package rbup
 
 import (
+	"io"
 	"bytes"
 	"testing"
+	"crypto/rand"
 )
 
 func TestRollingSum(t *testing.T) {
-	seed := []byte("four score and seven years ago I was eating cheese from #$%^?!")
+	seed := []byte("four score and seven years ago I was eating cheese from #$%^?!\n")
+	rand.Read(seed)
 	data := bytes.Repeat(seed, window / len(seed) + 1)
 
 	rs := NewRolling(data[:window])
-	for i, c := range data[window:] {
-		rs.WriteByte(c)
-		rs.Sum32()
-		t.Logf("sum to %v: %v, ratio=%v", i, rs.Sum32(), float64(rs.Sum32())/float64(1<<32))
+	for i := 0; i < 100000; i++ {
+		io.CopyN(rs, rand.Reader, 1)
+		if rs.Sum32() < target {
+			t.Logf("sum at %v<target: %v, ratio=%v", i, rs.Sum32(), float64(rs.Sum32())/float64(1<<32))
+		}
 	}
 }
 
 func TestSplit(t *testing.T) {
-	seed := []byte("three score and seven years ago I was eating much food and then the tree ran away from the spoon and the little hog rolled around in the mud and then the cheese kept eating much food and many zoo visits")
+	seed := []byte("three score and seven years ago I was eating much food and then\n the tree ran away from the spoon and the little hog rolled around in the mud and then the cheese kept eating much food and many zoo visits")
 	data := bytes.Repeat(seed, blockSize * 25 / len(seed))
 
-	ch := make(chan Chunk)
+	ch := make(chan []byte)
 
 	go Split(bytes.NewBuffer(data), ch)
 
 	n, tot := 0, 0
 	for chunk := range ch {
-		t.Logf("len(chunk)=%v", len(chunk.Data))
-		tot += len(chunk.Data)
+		t.Logf("len(chunk)=%v", len(chunk))
+		tot += len(chunk)
 		n++
 	}
 
@@ -38,10 +42,10 @@ func TestSplit(t *testing.T) {
 }
 
 func TestArchive(t *testing.T) {
-	seed := []byte("three score and seven years ago I was eating much food and then the tree ran away from the spoon and the little hog rolled around in the mud and then the cheese kept eating much food and many zoo visits")
+	seed := []byte("three score and seven years ago I was eating much food and then\n the tree ran away from the spoon and the little hog rolled around in the mud and then the cheese kept eating much food and many zoo visits")
 	data := bytes.Repeat(seed, blockSize * 25 / len(seed))
 
-	ch := make(chan Chunk)
+	ch := make(chan []byte)
 	go func() {
 		if err := Split(bytes.NewBuffer(data), ch); err != nil {
 			t.Fatal(err)
