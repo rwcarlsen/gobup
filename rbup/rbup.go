@@ -129,5 +129,9 @@ func Split(r io.Reader, ch chan Chunk) (err error) {
 			data = data[:0]
 		}
 	}
+
+	if len(data) > 0 {
+		ch <- Chunk{h.Sum32(), data}
+	}
 	return nil
 }
