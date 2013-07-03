@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math"
 	"os"
 	"path/filepath"
 )
@@ -65,8 +66,8 @@ func (rs *RollingSum) Sum32() uint32 {
 
 var (
 	window    int64  = 256
-	blockSize uint32 = 4096 * 4
-	target    uint32 = (1<<32 - 1) / blockSize
+	blockSize uint32 = 1024 * 32
+	target    uint32 = math.MaxUint32 / blockSize
 )
 
 type Index struct {
