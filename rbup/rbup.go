@@ -64,24 +64,39 @@ func (rs *RollingSum) Sum32() uint32 {
 }
 
 var (
-	window int64  = 256
-	blockSize uint32 = 4096
-	target uint32 = (1 << 32 - 1) / blockSize
+	window    int64  = 256
+	blockSize uint32 = 4096 * 4
+	target    uint32 = (1<<32 - 1) / blockSize
 )
 
+type Index struct {
+	Name    string
+	Objects []string
+}
+
 func Archive(ch chan Chunk, dst, name string) error {
+	if err := os.MkdirAll(dst, 0760); err != nil {
+		return err
+	}
+
 	h := sha1.New()
-	index := []string{}
+	index := &Index{Name: name}
 	for chunk := range ch {
+		h.Reset()
 		h.Write(chunk.Data)
 
 		fname := fmt.Sprintf("sha1-%x.dat", h.Sum(nil))
+		index.Objects = append(index.Objects, fname)
+
+		if _, err := os.Stat(filepath.Join(dst, fname)); err == nil {
+			continue
+		}
+
 		f, err := os.Create(filepath.Join(dst, fname))
 		if err != nil {
 			close(ch)
 			return err
 		}
-		index = append(index, fname)
 
 		if _, err := f.Write(chunk.Data); err != nil {
 			close(ch)
@@ -91,12 +106,12 @@ func Archive(ch chan Chunk, dst, name string) error {
 		f.Close()
 	}
 
-	data, err := json.Marshal(index)
+	data, err := json.MarshalIndent(index, "", "\t")
 	if err != nil {
 		return err
 	}
 
-	return ioutil.WriteFile(filepath.Join(dst, name+".idx"), data, 0750)
+	return ioutil.WriteFile(filepath.Join(dst, name+".idx"), data, 0660)
 }
 
 func Split(r io.Reader, ch chan Chunk) (err error) {
@@ -126,7 +141,7 @@ func Split(r io.Reader, ch chan Chunk) (err error) {
 		data = append(data, c)
 		if h.WriteByte(c); h.Sum32() < target {
 			ch <- Chunk{h.Sum32(), data}
-			data = data[:0]
+			data = []byte{}
 		}
 	}
 
