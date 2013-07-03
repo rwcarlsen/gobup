@@ -6,8 +6,8 @@ import (
 )
 
 func TestRollingSum(t *testing.T) {
-	seed := []byte("four score and seven years ago")
-	data := bytes.Repeat(seed, int(window) / len(seed) + 1)
+	seed := []byte("four score and seven years ago I was eating cheese from #$%^?!")
+	data := bytes.Repeat(seed, window / len(seed) + 1)
 
 	rs := NewRolling(data[:window])
 	for i, c := range data[window:] {
@@ -18,14 +18,14 @@ func TestRollingSum(t *testing.T) {
 }
 
 func TestSplit(t *testing.T) {
-	data := bytes.Repeat([]byte("three score and seven years ago I was eating much food and then the tree ran away from the spoon and the little hog rolled around in the mud and then the cheese kept eating much food and many zoo visits later I ate fifteen boxes of swiss and havarti cheese because they are two of my least unfavorite types of live sustenance.000000!@#$%^&*()"), 50000)
+	seed := []byte("three score and seven years ago I was eating much food and then the tree ran away from the spoon and the little hog rolled around in the mud and then the cheese kept eating much food and many zoo visits")
+	data := bytes.Repeat(seed, blockSize * 25 / len(seed))
 
 	ch := make(chan Chunk)
 
 	go Split(bytes.NewBuffer(data), ch)
 
-	tot := 0
-	n := 0
+	n, tot := 0, 0
 	for chunk := range ch {
 		t.Logf("len(chunk)=%v", len(chunk.Data))
 		tot += len(chunk.Data)
@@ -38,7 +38,8 @@ func TestSplit(t *testing.T) {
 }
 
 func TestArchive(t *testing.T) {
-	data := bytes.Repeat([]byte("four score and seven years ago I was eating much food and then the tree ran away from the spoon and the little hog rolled around in the mud"), 50000)
+	seed := []byte("three score and seven years ago I was eating much food and then the tree ran away from the spoon and the little hog rolled around in the mud and then the cheese kept eating much food and many zoo visits")
+	data := bytes.Repeat(seed, blockSize * 25 / len(seed))
 
 	ch := make(chan Chunk)
 	go func() {

@@ -19,7 +19,6 @@ type Chunk struct {
 }
 
 type RollingSum struct {
-	data   []byte
 	a      uint
 	b      uint
 	window []byte
@@ -36,10 +35,10 @@ func NewRolling(init []byte) *RollingSum {
 
 	for i, c := range init {
 		rs.a += uint(c)
-		rs.b += (rs.size - uint(i) + 1) * uint(c)
+		rs.b += (rs.size - uint(i)) * uint(c)
 	}
-	rs.a = rs.a % rs.m
-	rs.b = rs.b % rs.m
+	rs.a %= rs.m
+	rs.b %= rs.m
 
 	return rs
 }
@@ -53,7 +52,7 @@ func (rs *RollingSum) Write(data []byte) (n int, err error) {
 
 func (rs *RollingSum) WriteByte(c byte) error {
 	rs.a = (rs.a - uint(rs.window[0]) + uint(c)) % rs.m
-	rs.b = (rs.b - (rs.size+1)*uint(rs.window[0]) + rs.a) % rs.m
+	rs.b = (rs.b - rs.size*uint(rs.window[0]) + rs.a) % rs.m
 
 	rs.window = append(rs.window, c)
 	rs.window = rs.window[1:]
@@ -61,13 +60,13 @@ func (rs *RollingSum) WriteByte(c byte) error {
 }
 
 func (rs *RollingSum) Sum32() uint32 {
-	return uint32(rs.a) + uint32(rs.b)*uint32(rs.m)
+	return uint32(rs.a) + (uint32(rs.b) << 16)
 }
 
-var (
-	window    int64  = 256
-	blockSize uint32 = 1024 * 32
-	target    uint32 = math.MaxUint32 / blockSize
+const (
+	window    = 128
+	blockSize = 1024 * 8
+	target    = math.MaxUint32 / blockSize
 )
 
 type Index struct {
