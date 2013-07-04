@@ -1,3 +1,5 @@
+// Package rbup provides primitives for splitting and retrieving data in a
+// space-efficient manner using a rolling checksum algorithm.
 package rbup
 
 import (
@@ -23,11 +25,15 @@ const (
 
 const target = math.MaxUint32 / blockSize
 
+// Index is a structure for storing an ordered sequence of objects/files
+// representing a single backed-up file.
 type Index struct {
 	Name    string
 	Objects []string
 }
 
+// Archiver implements the Handler interface for storing split files in a
+// directory.
 type Archiver struct {
 	Name  string
 	Dst   string
@@ -47,6 +53,7 @@ func NewArchiver(name, dst string) (*Archiver, error) {
 	}, nil
 }
 
+// Close writes the index of split chunks to the archive's dst directory.
 func (a *Archiver) Close() error {
 	data, err := json.MarshalIndent(a.index, "", "\t")
 	if err != nil {
@@ -55,6 +62,7 @@ func (a *Archiver) Close() error {
 	return ioutil.WriteFile(filepath.Join(a.Dst, a.Name+".idx"), data, 0660)
 }
 
+// Write stores chunk in a hash-named file in the archive's dst directory.
 func (a *Archiver) Write(chunk []byte) (n int, err error) {
 	a.h.Reset()
 	a.h.Write(chunk)
@@ -75,27 +83,33 @@ func (a *Archiver) Write(chunk []byte) (n int, err error) {
 	return f.Write(chunk)
 }
 
+// Handler is an interface for receiving a set of split file chunks from
+// the Split function.
 type Handler interface {
 	io.WriteCloser
 }
 
+// Combine reconstitutes a split file with the given index and file chunks
+// stored in the dst directory.
 func Combine(index io.Reader, dst string) (io.Reader, error) {
 	indx := &Index{}
 	dec := json.NewDecoder(index)
 	if err := dec.Decode(indx); err != nil {
 		return nil, err
 	}
-	return &Reader{dst: dst, indx: indx}, nil
+	return &reader{dst: dst, indx: indx}, nil
 }
 
-type Reader struct {
+// reader is a special io.Reader that gradually returns bytes from all the
+// objects for a split file chunk by chunk.
+type reader struct {
 	dst      string
 	indx     *Index
 	buf      []byte
 	objIndex int
 }
 
-func (r *Reader) Read(data []byte) (n int, err error) {
+func (r *reader) Read(data []byte) (n int, err error) {
 	if r.objIndex == len(r.indx.Objects) {
 		return 0, io.EOF
 	}
@@ -114,6 +128,9 @@ func (r *Reader) Read(data []byte) (n int, err error) {
 	return n, nil
 }
 
+// Split splits the data in r into several chunks that are passed to h for
+// handling.  The process is aborted returning an error if h.Write returns
+// an error.
 func Split(r io.Reader, h Handler) (err error) {
 	defer func() {
 		if err2 := h.Close(); err == nil {
