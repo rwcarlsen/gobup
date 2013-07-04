@@ -15,11 +15,13 @@ import (
 	"github.com/rwcarlsen/gobup/rolling"
 )
 
+// configuration params
 const (
 	window    = 256
 	blockSize = 1024 * 32
-	target    = math.MaxUint32 / blockSize
 )
+
+const target = math.MaxUint32 / blockSize
 
 type Index struct {
 	Name    string
@@ -60,7 +62,7 @@ func (a *Archiver) Write(chunk []byte) (n int, err error) {
 	fname := fmt.Sprintf("sha1-%x.dat", a.h.Sum(nil))
 	a.index.Objects = append(a.index.Objects, fname)
 
-	if _, err := os.Stat(filepath.Join(a.Dst, fname)); err == nil {
+	if _, err := os.Open(filepath.Join(a.Dst, fname)); err == nil {
 		return len(chunk), nil // chunk file already exists
 	}
 
