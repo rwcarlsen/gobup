@@ -18,7 +18,7 @@ func TestSplit(t *testing.T) {
 	data := bytes.Repeat(seed, blockSize*25/len(seed))
 
 	expected := []int{
-		116785,
+		819105,
 		78891,
 		1582,
 		22427,
