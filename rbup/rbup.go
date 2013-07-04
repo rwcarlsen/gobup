@@ -11,52 +11,15 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+
+	"github.com/rwcarlsen/gobup/rolling"
 )
 
 const (
 	window    = 256
 	blockSize = 1024 * 32
 	target    = math.MaxUint32 / blockSize
-	m         = 1 << 16
 )
-
-type RollingSum struct {
-	a      uint
-	b      uint
-	window []byte
-	size   uint
-}
-
-func NewRolling(window uint) *RollingSum {
-	return &RollingSum{size: window}
-}
-
-func (rs *RollingSum) Write(data []byte) (n int, err error) {
-	for _, c := range data {
-		rs.WriteByte(c)
-	}
-	return len(data), nil
-}
-
-func (rs *RollingSum) WriteByte(c byte) error {
-	if len(rs.window) > 0 {
-		rs.a = (rs.a - uint(rs.window[0]) + uint(c)) % m
-		rs.b = (rs.b - uint(len(rs.window)+1)*uint(rs.window[0]) + rs.a) % m
-	} else {
-		rs.a = uint(c) % m
-		rs.b = rs.size * uint(c)
-	}
-
-	rs.window = append(rs.window, c)
-	if uint(len(rs.window)) > rs.size {
-		rs.window = rs.window[1:]
-	}
-	return nil
-}
-
-func (rs *RollingSum) Sum32() uint32 {
-	return uint32(rs.a) + uint32(rs.b)*m
-}
 
 type Index struct {
 	Name    string
@@ -112,7 +75,7 @@ func Split(r io.Reader, ch chan []byte) (err error) {
 	defer close(ch)
 
 	data := make([]byte, 0)
-	h := NewRolling(window)
+	h := rolling.New(window)
 	buf := bufio.NewReader(r)
 	for {
 		c, err := buf.ReadByte()

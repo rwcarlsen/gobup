@@ -2,20 +2,8 @@ package rbup
 
 import (
 	"bytes"
-	"crypto/rand"
-	"io"
 	"testing"
 )
-
-func TestRollingSum(t *testing.T) {
-	rs := NewRolling(window)
-	for i := 0; i < 100000; i++ {
-		io.CopyN(rs, rand.Reader, 1)
-		if rs.Sum32() < target {
-			t.Logf("sum at %v<target: %v, ratio=%v", i, rs.Sum32(), float64(rs.Sum32())/float64(1<<32))
-		}
-	}
-}
 
 func TestSplit(t *testing.T) {
 	seed := []byte("three score and seven years ago I was eating much food and then\n the tree ran away from the spoon and the little hog rolled around in the mud and then the cheese kept eating much food and many zoo visits")
