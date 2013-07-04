@@ -79,6 +79,41 @@ type Handler interface {
 	io.WriteCloser
 }
 
+func Combine(index io.Reader, dst string) (io.Reader, error) {
+	indx := &Index{}
+	dec := json.NewDecoder(index)
+	if err := dec.Decode(indx); err != nil {
+		return nil, err
+	}
+	return &Reader{dst: dst, indx: indx}, nil
+}
+
+type Reader struct {
+	dst      string
+	indx     *Index
+	buf      []byte
+	objIndex int
+}
+
+func (r *Reader) Read(data []byte) (n int, err error) {
+	if r.objIndex == len(r.indx.Objects) {
+		return 0, io.EOF
+	}
+
+	if len(r.buf) == 0 {
+		fpath := filepath.Join(r.dst, r.indx.Objects[r.objIndex])
+		r.buf, err = ioutil.ReadFile(fpath)
+		if err != nil {
+			return 0, err
+		}
+		r.objIndex++
+	}
+
+	n = copy(data, r.buf)
+	r.buf = r.buf[n:]
+	return n, nil
+}
+
 func Split(r io.Reader, h Handler) (err error) {
 	defer func() {
 		if err2 := h.Close(); err == nil {
