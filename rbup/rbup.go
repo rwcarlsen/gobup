@@ -17,7 +17,7 @@ const (
 	window    = 256
 	blockSize = 1024 * 32
 	target    = math.MaxUint32 / blockSize
-	m = 1 << 16
+	m         = 1 << 16
 )
 
 type RollingSum struct {
@@ -27,20 +27,8 @@ type RollingSum struct {
 	size   uint
 }
 
-func NewRolling(init []byte) *RollingSum {
-	rs := &RollingSum{
-		size:   uint(len(init)),
-		window: init,
-	}
-
-	for i, c := range init {
-		rs.a += uint(c)
-		rs.b += (rs.size - uint(i)) * uint(c)
-	}
-	rs.a %= m
-	rs.b %= m
-
-	return rs
+func NewRolling(window uint) *RollingSum {
+	return &RollingSum{size: window}
 }
 
 func (rs *RollingSum) Write(data []byte) (n int, err error) {
@@ -51,16 +39,23 @@ func (rs *RollingSum) Write(data []byte) (n int, err error) {
 }
 
 func (rs *RollingSum) WriteByte(c byte) error {
-	rs.a = (rs.a - uint(rs.window[0]) + uint(c)) % m
-	rs.b = (rs.b - rs.size*uint(rs.window[0]) + rs.a) % m
+	if len(rs.window) > 0 {
+		rs.a = (rs.a - uint(rs.window[0]) + uint(c)) % m
+		rs.b = (rs.b - uint(len(rs.window)+1)*uint(rs.window[0]) + rs.a) % m
+	} else {
+		rs.a = uint(c) % m
+		rs.b = rs.size * uint(c)
+	}
 
 	rs.window = append(rs.window, c)
-	rs.window = rs.window[1:]
+	if uint(len(rs.window)) > rs.size {
+		rs.window = rs.window[1:]
+	}
 	return nil
 }
 
 func (rs *RollingSum) Sum32() uint32 {
-	return uint32(rs.a) + uint32(rs.b) * m
+	return uint32(rs.a) + uint32(rs.b)*m
 }
 
 type Index struct {
@@ -116,16 +111,8 @@ func Split(r io.Reader, ch chan []byte) (err error) {
 	}()
 	defer close(ch)
 
-	data := make([]byte, window)
-	n, err := io.ReadFull(r, data)
-	if err == io.ErrUnexpectedEOF {
-		ch <- data[:n]
-		return nil
-	} else if err != nil {
-		return err
-	}
-
-	h := NewRolling(data)
+	data := make([]byte, 0)
+	h := NewRolling(window)
 	buf := bufio.NewReader(r)
 	for {
 		c, err := buf.ReadByte()

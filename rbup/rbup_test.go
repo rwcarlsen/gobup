@@ -1,18 +1,14 @@
 package rbup
 
 import (
-	"io"
 	"bytes"
-	"testing"
 	"crypto/rand"
+	"io"
+	"testing"
 )
 
 func TestRollingSum(t *testing.T) {
-	seed := []byte("four score and seven years ago I was eating cheese from #$%^?!\n")
-	rand.Read(seed)
-	data := bytes.Repeat(seed, window / len(seed) + 1)
-
-	rs := NewRolling(data[:window])
+	rs := NewRolling(window)
 	for i := 0; i < 100000; i++ {
 		io.CopyN(rs, rand.Reader, 1)
 		if rs.Sum32() < target {
@@ -23,7 +19,7 @@ func TestRollingSum(t *testing.T) {
 
 func TestSplit(t *testing.T) {
 	seed := []byte("three score and seven years ago I was eating much food and then\n the tree ran away from the spoon and the little hog rolled around in the mud and then the cheese kept eating much food and many zoo visits")
-	data := bytes.Repeat(seed, blockSize * 25 / len(seed))
+	data := bytes.Repeat(seed, blockSize*25/len(seed))
 
 	ch := make(chan []byte)
 
@@ -43,7 +39,7 @@ func TestSplit(t *testing.T) {
 
 func TestArchive(t *testing.T) {
 	seed := []byte("three score and seven years ago I was eating much food and then\n the tree ran away from the spoon and the little hog rolled around in the mud and then the cheese kept eating much food and many zoo visits")
-	data := bytes.Repeat(seed, blockSize * 25 / len(seed))
+	data := bytes.Repeat(seed, blockSize*25/len(seed))
 
 	ch := make(chan []byte)
 	go func() {
