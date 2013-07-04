@@ -4,8 +4,8 @@ import (
 	"bufio"
 	"crypto/sha1"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"io/ioutil"
 	"math"
@@ -26,56 +26,66 @@ type Index struct {
 	Objects []string
 }
 
-func Archive(ch chan []byte, dst, name string) error {
+type Archiver struct {
+	Name  string
+	Dst   string
+	index *Index
+	h     hash.Hash
+}
+
+func NewArchiver(name, dst string) (*Archiver, error) {
 	if err := os.MkdirAll(dst, 0760); err != nil {
-		return err
+		return nil, err
 	}
+	return &Archiver{
+		Name:  name,
+		Dst:   dst,
+		index: &Index{Name: name},
+		h:     sha1.New(),
+	}, nil
+}
 
-	h := sha1.New()
-	index := &Index{Name: name}
-	for chunk := range ch {
-		h.Reset()
-		h.Write(chunk)
-
-		fname := fmt.Sprintf("sha1-%x.dat", h.Sum(nil))
-		index.Objects = append(index.Objects, fname)
-
-		if _, err := os.Stat(filepath.Join(dst, fname)); err == nil {
-			continue
-		}
-
-		f, err := os.Create(filepath.Join(dst, fname))
-		if err != nil {
-			close(ch)
-			return err
-		}
-
-		if _, err := f.Write(chunk); err != nil {
-			close(ch)
-			return err
-		}
-
-		f.Close()
-	}
-
-	data, err := json.MarshalIndent(index, "", "\t")
+func (a *Archiver) Close() error {
+	data, err := json.MarshalIndent(a.index, "", "\t")
 	if err != nil {
 		return err
 	}
-
-	return ioutil.WriteFile(filepath.Join(dst, name+".idx"), data, 0660)
+	return ioutil.WriteFile(filepath.Join(a.Dst, a.Name+".idx"), data, 0660)
 }
 
-func Split(r io.Reader, ch chan []byte) (err error) {
+func (a *Archiver) Write(chunk []byte) (n int, err error) {
+	a.h.Reset()
+	a.h.Write(chunk)
+
+	fname := fmt.Sprintf("sha1-%x.dat", a.h.Sum(nil))
+	a.index.Objects = append(a.index.Objects, fname)
+
+	if _, err := os.Stat(filepath.Join(a.Dst, fname)); err == nil {
+		return len(chunk), nil // chunk file already exists
+	}
+
+	f, err := os.Create(filepath.Join(a.Dst, fname))
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+
+	return f.Write(chunk)
+}
+
+type Handler interface {
+	io.WriteCloser
+}
+
+func Split(r io.Reader, h Handler) (err error) {
 	defer func() {
-		if r := recover(); r != nil {
-			err = errors.New("rbup: channel closed unexpectedly")
+		if err2 := h.Close(); err == nil {
+			err = err2
 		}
 	}()
-	defer close(ch)
 
 	data := make([]byte, 0)
-	h := rolling.New(window)
+	rh := rolling.New(window)
 	buf := bufio.NewReader(r)
 	for {
 		c, err := buf.ReadByte()
@@ -83,14 +93,18 @@ func Split(r io.Reader, ch chan []byte) (err error) {
 			break
 		}
 		data = append(data, c)
-		if h.WriteByte(c); h.Sum32() < target {
-			ch <- data
+		if rh.WriteByte(c); rh.Sum32() < target {
+			if _, err := h.Write(data); err != nil {
+				return err
+			}
 			data = make([]byte, 0)
 		}
 	}
 
 	if len(data) > 0 {
-		ch <- data
+		if _, err := h.Write(data); err != nil {
+			return err
+		}
 	}
 	return nil
 }
