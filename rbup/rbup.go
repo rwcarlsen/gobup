@@ -11,6 +11,8 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+
+	"github.com/rwcarlsen/gobup/rolling"
 )
 
 const (
@@ -73,7 +75,7 @@ func Split(r io.Reader, ch chan []byte) (err error) {
 	defer close(ch)
 
 	data := make([]byte, 0)
-	h := NewRolling(window)
+	h := rolling.New(window)
 	buf := bufio.NewReader(r)
 	for {
 		c, err := buf.ReadByte()
