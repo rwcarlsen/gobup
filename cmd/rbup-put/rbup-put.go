@@ -18,15 +18,14 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer f.Close()
 
-	ch := make(chan []byte)
-	go func() {
-		if err := rbup.Split(f, ch); err != nil {
-			log.Fatal(err)
-		}
-	}()
+	a, err := rbup.NewArchiver(filepath.Base(fpath), dst)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	if err := rbup.Archive(ch, dst, filepath.Base(fpath)); err != nil {
+	if err := rbup.Split(f, a); err != nil {
 		log.Fatal(err)
 	}
 }
