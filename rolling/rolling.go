@@ -1,3 +1,5 @@
+// Package rolling implements a 32 bit rolling checksum similar to rsync's
+// algorithm.
 package rolling
 
 import (
