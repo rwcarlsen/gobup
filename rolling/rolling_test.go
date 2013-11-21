@@ -1,8 +1,8 @@
 package rolling
 
 import (
-	"io"
 	"crypto/rand"
+	"io"
 	"math"
 	"testing"
 )

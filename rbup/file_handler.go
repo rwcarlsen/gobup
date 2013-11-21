@@ -33,9 +33,9 @@ func NewArchiver(name, dst string) (*Archiver, error) {
 		return nil, err
 	}
 	return &Archiver{
-		Name:  name,
-		Dst:   dst,
-		h:     sha1.New(),
+		Name: name,
+		Dst:  dst,
+		h:    sha1.New(),
 	}, nil
 }
 
