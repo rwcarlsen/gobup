@@ -14,12 +14,6 @@ import (
 )
 
 var (
-	createTblsSql = []string{
-		"CREATE TABLE IF NOT EXISTS objinfo (fid INTEGER,label TEXT,hash TEXT,modtime INTEGER);",
-		"CREATE TABLE IF NOT EXISTS chunks (hash TEXT,data BLOB);",
-		"CREATE TABLE IF NOT EXISTS objindex (fid INTEGER,chunkrow INTEGER);",
-		"CREATE INDEX IF NOT EXISTS chunks_hash ON chunks (hash ASC);",
-	}
 	insertIdxEntrySql = "INSERT INTO objindex VALUES(?,?);"
 	insertIdxInfoSql  = "INSERT INTO objinfo VALUES(?,?,?,?);"
 	insertChunkSql    = "INSERT INTO chunks (rowid,hash,data) VALUES(?,?,?);"
@@ -27,6 +21,10 @@ var (
 	getMaxChunkRowSql = "SELECT MAX(rowid) FROM chunks;"
 	chunkRowSql       = "SELECT rowid FROM chunks WHERE hash = ?;"
 )
+
+func sumText(hashsum []byte) string {
+	return fmt.Sprintf("sha1-%x", hashsum)
+}
 
 // Handler implements the rbup.Handler interface for storing split files in a
 // sql database. Do NOT reuse a handler for multiple objects/files.
@@ -44,12 +42,8 @@ type Handler struct {
 // Create a new handler dumping data chunks and index info to db for an
 // object/file identified by label.
 func New(db *sql.DB, label string) (h *Handler, err error) {
-	// create tables
-	for _, sql := range createTblsSql {
-		_, err := db.Exec(sql)
-		if err != nil {
-			return nil, err
-		}
+	if err := InitDB(db); err != nil {
+		return nil, err
 	}
 
 	// get next file/object id
@@ -97,8 +91,8 @@ func (h *Handler) Close() (err error) {
 		}
 	}
 
-	sumText := fmt.Sprintf("sha1-%x", h.fullH.Sum(nil))
-	_, err = h.tx.Exec(insertIdxInfoSql, h.fid, h.label, sumText, time.Now())
+	sum := sumText(h.fullH.Sum(nil))
+	_, err = h.tx.Exec(insertIdxInfoSql, h.fid, h.label, sum, time.Now())
 	return err
 }
 
@@ -107,10 +101,11 @@ func (h *Handler) Write(chunk []byte) (n int, err error) {
 	// get chunk hashsum
 	h.chunkH.Reset()
 	h.chunkH.Write(chunk)
-	sumText := fmt.Sprintf("sha1-%x", h.chunkH.Sum(nil))
+	h.fullH.Write(chunk)
+	sum := sumText(h.chunkH.Sum(nil))
 
 	// check and return rowid if chunk already exists
-	row := h.tx.QueryRow(chunkRowSql, sumText)
+	row := h.tx.QueryRow(chunkRowSql, sum)
 	var rowid int
 	if err := row.Scan(&rowid); err == nil {
 		h.index = append(h.index, rowid)
@@ -120,7 +115,7 @@ func (h *Handler) Write(chunk []byte) (n int, err error) {
 	}
 
 	// add chunk to db
-	_, err = h.tx.Exec(insertChunkSql, h.nextChunkRow, sumText, chunk)
+	_, err = h.tx.Exec(insertChunkSql, h.nextChunkRow, sum, chunk)
 	if err != nil {
 		return 0, err
 	}
