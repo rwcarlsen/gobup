@@ -25,19 +25,19 @@ var (
 	insertChunkSql    = "INSERT INTO chunks (rowid,hash,data) VALUES(?,?,?);"
 	getMaxFidSql      = "SELECT MAX(fid) FROM objinfo;"
 	getMaxChunkRowSql = "SELECT MAX(rowid) FROM chunks;"
-	chunkRowSql    = "SELECT rowid FROM chunks WHERE hash = ?;"
+	chunkRowSql       = "SELECT rowid FROM chunks WHERE hash = ?;"
 )
 
 // Handler implements the rbup.Handler interface for storing split files in a
 // sql database. Do NOT reuse a handler for multiple objects/files.
 type Handler struct {
-	label  string
-	fid    int
-	db     *sql.DB
-	index  []int // []chunkrow
-	fullH  hash.Hash
-	chunkH hash.Hash
-	tx     *sql.Tx
+	label        string
+	fid          int
+	db           *sql.DB
+	index        []int // []chunkrow
+	fullH        hash.Hash
+	chunkH       hash.Hash
+	tx           *sql.Tx
 	nextChunkRow int
 }
 

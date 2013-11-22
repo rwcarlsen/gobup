@@ -1,11 +1,11 @@
 package main
 
 import (
+	"database/sql"
 	"flag"
 	"log"
 	"os"
 	"path/filepath"
-	"database/sql"
 
 	_ "code.google.com/p/go-sqlite/go1/sqlite3"
 	"github.com/rwcarlsen/gobup/rbup"
