@@ -9,8 +9,8 @@ import (
 const m = 1 << 16
 
 type RollingSum struct {
-	a      uint
-	b      uint
+	a      uint16
+	b      uint16
 	window []byte
 	size   int
 }
@@ -28,17 +28,15 @@ func (rs *RollingSum) Write(data []byte) (n int, err error) {
 
 func (rs *RollingSum) WriteByte(c byte) error {
 	if len(rs.window) == rs.size {
-		rs.a += -uint(rs.window[0]) + uint(c)
-		rs.b += -uint(rs.size)*uint(rs.window[0]) + rs.a
+		rs.a += -uint16(rs.window[0]) + uint16(c)
+		rs.b += -uint16(rs.size)*uint16(rs.window[0]) + rs.a
 	} else if len(rs.window) > 0 {
-		rs.a += uint(c)
-		rs.b += uint(c) * uint(len(rs.window))
+		rs.a += uint16(c)
+		rs.b += uint16(c) * uint16(len(rs.window))
 	} else {
-		rs.a = uint(c)
-		rs.b = uint(rs.size) * uint(c)
+		rs.a = uint16(c)
+		rs.b = uint16(rs.size) * uint16(c)
 	}
-	rs.a %= m
-	rs.b %= m
 
 	rs.window = append(rs.window, c)
 	if len(rs.window) > rs.size {
