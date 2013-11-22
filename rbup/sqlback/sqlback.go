@@ -18,13 +18,14 @@ var (
 		"CREATE TABLE IF NOT EXISTS objinfo (fid INTEGER,label TEXT,hash TEXT,modtime INTEGER);",
 		"CREATE TABLE IF NOT EXISTS chunks (hash TEXT,data BLOB);",
 		"CREATE TABLE IF NOT EXISTS objindex (fid INTEGER,chunkrow INTEGER);",
+		"CREATE INDEX chunks_hash ON chunks (hash ASC);",
 	}
 	insertIdxEntrySql = "INSERT INTO objindex VALUES(?,?);"
 	insertIdxInfoSql  = "INSERT INTO objinfo VALUES(?,?,?,?);"
 	insertChunkSql    = "INSERT INTO chunks (rowid,hash,data) VALUES(?,?,?);"
 	getMaxFidSql      = "SELECT MAX(fid) FROM objinfo;"
 	getMaxChunkRowSql = "SELECT MAX(rowid) FROM chunks;"
-	chunkExistsSql    = "SELECT EXISTS(SELECT hash FROM chunks WHERE hash = ?);"
+	chunkRowSql    = "SELECT rowid FROM chunks WHERE hash = ?;"
 )
 
 // Handler implements the rbup.Handler interface for storing split files in a
@@ -37,49 +38,54 @@ type Handler struct {
 	fullH  hash.Hash
 	chunkH hash.Hash
 	tx     *sql.Tx
+	nextChunkRow int
 }
 
 // Create a new handler dumping data chunks and index info to db for an
 // object/file identified by label.
 func New(db *sql.DB, label string) (h *Handler, err error) {
-	h.tx, err = db.Begin()
-
+	// create tables
 	for _, sql := range createTblsSql {
-		_, err := h.tx.Exec(sql)
+		_, err := db.Exec(sql)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	rows, err := db.Query(getMaxFidSql)
-	if err != nil {
-		return nil, err
-	}
-	var maxfid int
-	for rows.Next() {
-		if err := rows.Scan(&maxfid); err != nil {
-			return nil, err
-		}
-		break
-	}
-	if err := rows.Err(); err != nil {
+	// get next file/object id
+	var maxfid sql.NullInt64
+	row := db.QueryRow(getMaxFidSql)
+	if err := row.Scan(&maxfid); err != nil {
 		return nil, err
 	}
 
-	return &Handler{
-		label:  label,
-		fid:    maxfid + 1,
-		db:     db,
-		fullH:  sha1.New(),
-		chunkH: sha1.New(),
-	}, nil
+	// get next chunk rowid
+	var maxrow sql.NullInt64
+	row = db.QueryRow(getMaxChunkRowSql)
+	if err := row.Scan(&maxrow); err != nil {
+		return nil, err
+	}
+
+	// config and return handler
+	h = &Handler{}
+	h.tx, err = db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	h.nextChunkRow = int(maxrow.Int64) + 1
+	h.label = label
+	h.fid = int(maxfid.Int64) + 1
+	h.db = db
+	h.fullH = sha1.New()
+	h.chunkH = sha1.New()
+	return h, nil
 }
 
 // Close writes the chunk index to the database.
 func (h *Handler) Close() (err error) {
 	defer func() {
 		if err != nil {
-			err = h.tx.Rollback()
+			h.tx.Rollback()
 			return
 		}
 		err = h.tx.Commit()
@@ -98,53 +104,28 @@ func (h *Handler) Close() (err error) {
 
 // Write stores chunk in a hash-named file in the archive's dst directory.
 func (h *Handler) Write(chunk []byte) (n int, err error) {
-	// get next chunk rowid
-	var maxrow int
-	h.db.Query(getMaxChunkRowSql)
-	rows, err := h.db.Query(getMaxChunkRowSql)
-	if err != nil {
-		return 0, err
-	}
-	for rows.Next() {
-		if err := rows.Scan(&maxrow); err != nil {
-			return 0, err
-		}
-		break
-	}
-	if err := rows.Err(); err != nil {
-		return 0, err
-	}
-
 	// get chunk hashsum
 	h.chunkH.Reset()
 	h.chunkH.Write(chunk)
 	sumText := fmt.Sprintf("sha1-%x", h.chunkH.Sum(nil))
 
-	// check and return if chunk already exists
-	rows, err = h.db.Query(chunkExistsSql, sumText)
-	if err != nil {
-		return 0, err
-	}
-	for rows.Next() {
-		var exists int
-		if err := rows.Scan(&exists); err != nil {
-			return 0, err
-		}
-		if exists == 1 {
-			h.index = append(h.index, maxrow+1)
-			return len(chunk), nil
-		}
-	}
-	if err := rows.Err(); err != nil {
+	// check and return rowid if chunk already exists
+	row := h.tx.QueryRow(chunkRowSql, sumText)
+	var rowid int
+	if err := row.Scan(&rowid); err == nil {
+		h.index = append(h.index, rowid)
+		return len(chunk), nil
+	} else if err != nil && err != sql.ErrNoRows {
 		return 0, err
 	}
 
 	// add chunk to db
-	_, err = h.tx.Exec(insertChunkSql, maxrow+1, sumText, chunk)
+	_, err = h.tx.Exec(insertChunkSql, h.nextChunkRow, sumText, chunk)
 	if err != nil {
 		return 0, err
 	}
-	h.index = append(h.index, maxrow+1)
+	h.index = append(h.index, h.nextChunkRow)
+	h.nextChunkRow++
 	return len(chunk), nil
 }
 

@@ -5,27 +5,40 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"database/sql"
 
+	_ "code.google.com/p/go-sqlite/go1/sqlite3"
 	"github.com/rwcarlsen/gobup/rbup"
+	"github.com/rwcarlsen/gobup/rbup/sqlback"
 )
 
+var dbpath = flag.String("db", filepath.Join(os.Getenv("HOME"), ".rbup.sqlite"), "database to dump data to")
+
 func main() {
+	log.SetFlags(0)
 	flag.Parse()
-	fpath := flag.Arg(0)
-	dst := flag.Arg(1)
+
+	db, err := sql.Open("sqlite3", *dbpath)
+	fatalif(err)
+	defer db.Close()
+
+	fpath, err := filepath.Abs(flag.Arg(0))
+	fatalif(err)
+
+	h, err := sqlback.New(db, fpath)
+	fatalif(err)
 
 	f, err := os.Open(fpath)
-	if err != nil {
-		log.Fatal(err)
-	}
+	fatalif(err)
 	defer f.Close()
 
-	a, err := rbup.NewArchiver(filepath.Base(fpath), dst)
-	if err != nil {
+	if err := rbup.Split(f, h); err != nil {
 		log.Fatal(err)
 	}
+}
 
-	if err := rbup.Split(f, a); err != nil {
+func fatalif(err error) {
+	if err != nil {
 		log.Fatal(err)
 	}
 }
