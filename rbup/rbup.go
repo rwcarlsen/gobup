@@ -37,17 +37,21 @@ func Split(r io.Reader, h Handler) (err error) {
 	data := make([]byte, 0)
 	rh := rolling.New(Window)
 	buf := bufio.NewReader(r)
+	lastSplit := 0 // helps prevent null-byte-run splitting
 	for i := 0; i > -1; i++ {
 		c, err := buf.ReadByte()
 		if err != nil {
 			break
 		}
 		data = append(data, c)
-		if rh.WriteByte(c); int(rh.Sum32()) < target && i > Window {
+		rh.WriteByte(c)
+		sum := int(rh.Sum32())
+		if sum < target && (i - lastSplit) > Window {
 			if _, err := h.Write(data); err != nil {
 				return err
 			}
 			data = data[:0]
+			lastSplit = i
 		}
 	}
 
