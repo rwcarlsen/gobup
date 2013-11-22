@@ -14,6 +14,7 @@ var (
 		"CREATE TABLE IF NOT EXISTS objindex (fid INTEGER,chunkrow INTEGER);",
 		"CREATE INDEX IF NOT EXISTS chunks_hash ON chunks (hash ASC);",
 		"CREATE INDEX IF NOT EXISTS objinfo_hash ON objinfo (hash ASC);",
+		"CREATE INDEX IF NOT EXISTS objinfo_label ON objinfo (label ASC);",
 	}
 	objExistsSql = "SELECT fid,label,hash,modtime FROM objinfo WHERE hash = ?;"
 )

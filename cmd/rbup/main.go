@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"database/sql"
 	"flag"
 	"log"
@@ -36,30 +35,31 @@ func main() {
 	defer db.Close()
 	fatalif(sqlback.InitDB(db))
 
-	fpath, err := filepath.Abs(flag.Arg(0))
-	fatalif(err)
-	f, err := os.Open(fpath)
-	fatalif(err)
-	defer f.Close()
-
-	info, err := sqlback.GetHeader(db, f)
-	fatalif(err)
-	if info != nil {
-		if info.Label != fpath {
-			info.Label = fpath
-			info.ModTime = time.Now()
-			fatalif(sqlback.PutHeader(db, info))
-		}
-		fmt.Println("nothing new added")
-	} else {
-		h, err := sqlback.New(db, fpath)
+	for _, fname := range flag.Args() {
+		fpath, err := filepath.Abs(fname)
+		fatalif(err)
+		f, err := os.Open(fpath)
 		fatalif(err)
 
-		_, err = f.Seek(0, os.SEEK_SET)
+		info, err := sqlback.GetHeader(db, f)
 		fatalif(err)
-		if err := rbup.Split(f, h); err != nil {
-			log.Fatal(err)
+		if info != nil {
+			if info.Label != fpath {
+				info.Label = fpath
+				info.ModTime = time.Now()
+				fatalif(sqlback.PutHeader(db, info))
+			}
+		} else {
+			h, err := sqlback.New(db, fpath)
+			fatalif(err)
+
+			_, err = f.Seek(0, os.SEEK_SET)
+			fatalif(err)
+			if err := rbup.Split(f, h); err != nil {
+				log.Fatal(err)
+			}
 		}
+		fatalif(f.Close())
 	}
 }
 
