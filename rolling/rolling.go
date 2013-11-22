@@ -6,13 +6,12 @@ import (
 	"encoding/binary"
 )
 
-const m = 1 << 16
-
 type RollingSum struct {
 	a      uint16
 	b      uint16
 	window []byte
 	size   int
+	i      int
 }
 
 func New(window int) *RollingSum {
@@ -30,17 +29,19 @@ func (rs *RollingSum) Write(data []byte) (n int, err error) {
 }
 
 func (rs *RollingSum) WriteByte(c byte) error {
-	rs.a += -uint16(rs.window[0]) + uint16(c)
-	rs.b += -uint16(rs.size)*uint16(rs.window[0]) + rs.a
+	rs.a += -uint16(rs.window[rs.i]) + uint16(c)
+	rs.b += -uint16(rs.size)*uint16(rs.window[rs.i]) + rs.a
 
-	rs.window = append(rs.window, c)
-	rs.window = rs.window[1:]
+	rs.window[rs.i] = c
+	if rs.i++; rs.i == rs.size {
+		rs.i = 0
+	}
 
 	return nil
 }
 
 func (rs *RollingSum) Sum32() uint32 {
-	return uint32(rs.a) + uint32(rs.b)*m
+	return uint32(rs.a) | (uint32(rs.b) << 16)
 }
 
 func (rs *RollingSum) Size() int {

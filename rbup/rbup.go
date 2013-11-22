@@ -12,8 +12,8 @@ import (
 
 // configuration params
 var (
-	Window    = 256
-	BlockSize = 1024 * 32
+	Window           = 256
+	BlockSize uint32 = 1024 * 32
 )
 
 var target = math.MaxUint32 / BlockSize
@@ -34,24 +34,22 @@ func Split(r io.Reader, h Handler) (err error) {
 		}
 	}()
 
-	data := make([]byte, 0)
+	data := make([]byte, 0, BlockSize*2)
 	rh := rolling.New(Window)
 	buf := bufio.NewReader(r)
-	lastSplit := 0 // helps prevent null-byte-run splitting
-	for i := 0; i > -1; i++ {
+	for {
 		c, err := buf.ReadByte()
 		if err != nil {
 			break
 		}
 		data = append(data, c)
+
 		rh.WriteByte(c)
-		sum := int(rh.Sum32())
-		if sum < target && (i - lastSplit) > Window {
+		if rh.Sum32() < target && len(data) >= Window {
 			if _, err := h.Write(data); err != nil {
 				return err
 			}
 			data = data[:0]
-			lastSplit = i
 		}
 	}
 

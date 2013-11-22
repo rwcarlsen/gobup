@@ -18,7 +18,7 @@ var (
 		"CREATE TABLE IF NOT EXISTS objinfo (fid INTEGER,label TEXT,hash TEXT,modtime INTEGER);",
 		"CREATE TABLE IF NOT EXISTS chunks (hash TEXT,data BLOB);",
 		"CREATE TABLE IF NOT EXISTS objindex (fid INTEGER,chunkrow INTEGER);",
-		"CREATE INDEX chunks_hash ON chunks (hash ASC);",
+		"CREATE INDEX IF NOT EXISTS chunks_hash ON chunks (hash ASC);",
 	}
 	insertIdxEntrySql = "INSERT INTO objindex VALUES(?,?);"
 	insertIdxInfoSql  = "INSERT INTO objinfo VALUES(?,?,?,?);"
