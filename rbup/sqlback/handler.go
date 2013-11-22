@@ -31,7 +31,6 @@ func sumText(hashsum []byte) string {
 type Handler struct {
 	label        string
 	fid          int
-	db           *sql.DB
 	index        []int // []chunkrow
 	fullH        hash.Hash
 	chunkH       hash.Hash
@@ -41,35 +40,27 @@ type Handler struct {
 
 // Create a new handler dumping data chunks and index info to db for an
 // object/file identified by label.
-func New(db *sql.DB, label string) (h *Handler, err error) {
-	if err := InitDB(db); err != nil {
-		return nil, err
-	}
-
+func New(tx *sql.Tx, label string) (h *Handler, err error) {
 	// get next file/object id
 	var maxfid sql.NullInt64
-	row := db.QueryRow(getMaxFidSql)
+	row := tx.QueryRow(getMaxFidSql)
 	if err := row.Scan(&maxfid); err != nil {
 		return nil, err
 	}
 
 	// get next chunk rowid
 	var maxrow sql.NullInt64
-	row = db.QueryRow(getMaxChunkRowSql)
+	row = tx.QueryRow(getMaxChunkRowSql)
 	if err := row.Scan(&maxrow); err != nil {
 		return nil, err
 	}
 
 	// config and return handler
 	h = &Handler{}
-	h.tx, err = db.Begin()
-	if err != nil {
-		return nil, err
-	}
+	h.tx = tx
 	h.nextChunkRow = int(maxrow.Int64) + 1
 	h.label = label
 	h.fid = int(maxfid.Int64) + 1
-	h.db = db
 	h.fullH = sha1.New()
 	h.chunkH = sha1.New()
 	return h, nil
@@ -77,14 +68,6 @@ func New(db *sql.DB, label string) (h *Handler, err error) {
 
 // Close writes the chunk index to the database.
 func (h *Handler) Close() (err error) {
-	defer func() {
-		if err != nil {
-			h.tx.Rollback()
-			return
-		}
-		err = h.tx.Commit()
-	}()
-
 	for _, rowid := range h.index {
 		if _, err := h.tx.Exec(insertIdxEntrySql, h.fid, rowid); err != nil {
 			return err

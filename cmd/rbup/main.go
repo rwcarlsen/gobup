@@ -34,6 +34,9 @@ func main() {
 	fatalif(err)
 	defer db.Close()
 	fatalif(sqlback.InitDB(db))
+	tx, err := db.Begin()
+	fatalif(err)
+	defer tx.Commit()
 
 	for _, fname := range flag.Args() {
 		fpath, err := filepath.Abs(fname)
@@ -41,16 +44,16 @@ func main() {
 		f, err := os.Open(fpath)
 		fatalif(err)
 
-		info, err := sqlback.GetHeader(db, f)
+		info, err := sqlback.GetHeader(tx, f)
 		fatalif(err)
 		if info != nil {
 			if info.Label != fpath {
 				info.Label = fpath
 				info.ModTime = time.Now()
-				fatalif(sqlback.PutHeader(db, info))
+				fatalif(sqlback.PutHeader(tx, info))
 			}
 		} else {
-			h, err := sqlback.New(db, fpath)
+			h, err := sqlback.New(tx, fpath)
 			fatalif(err)
 
 			_, err = f.Seek(0, os.SEEK_SET)

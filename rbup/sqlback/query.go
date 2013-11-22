@@ -41,14 +41,14 @@ func InitDB(db *sql.DB) error {
 // GetHeader returns the object's summary info if the object already exists.
 // Returns nil otherwise. r contains the bytes of the object to search for in
 // db.
-func GetHeader(db *sql.DB, r io.Reader) (info *ObjHeader, err error) {
+func GetHeader(tx *sql.Tx, r io.Reader) (info *ObjHeader, err error) {
 	h := sha1.New()
 	if _, err := io.Copy(h, r); err != nil {
 		return nil, err
 	}
 
 	info = &ObjHeader{}
-	row := db.QueryRow(objExistsSql, sumText(h.Sum(nil)))
+	row := tx.QueryRow(objExistsSql, sumText(h.Sum(nil)))
 	var t int64
 	err = row.Scan(&info.Fid, &info.Label, &info.HashSum, &t)
 	if err == sql.ErrNoRows {
@@ -63,7 +63,7 @@ func GetHeader(db *sql.DB, r io.Reader) (info *ObjHeader, err error) {
 
 // PutHeader adds an object header to db.  This should only be called to
 // create a new, updated header entry for an object that already exists.
-func PutHeader(db *sql.DB, info *ObjHeader) (err error) {
-	_, err = db.Exec(insertIdxInfoSql, info.Fid, info.Label, info.HashSum, info.ModTime)
+func PutHeader(tx *sql.Tx, info *ObjHeader) (err error) {
+	_, err = tx.Exec(insertIdxInfoSql, info.Fid, info.Label, info.HashSum, info.ModTime)
 	return err
 }
