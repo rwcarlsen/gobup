@@ -16,7 +16,10 @@ type RollingSum struct {
 }
 
 func New(window int) *RollingSum {
-	return &RollingSum{size: window}
+	return &RollingSum{
+		window: make([]byte, window),
+		size:   window,
+	}
 }
 
 func (rs *RollingSum) Write(data []byte) (n int, err error) {
@@ -27,21 +30,12 @@ func (rs *RollingSum) Write(data []byte) (n int, err error) {
 }
 
 func (rs *RollingSum) WriteByte(c byte) error {
-	if len(rs.window) == rs.size {
-		rs.a += -uint16(rs.window[0]) + uint16(c)
-		rs.b += -uint16(rs.size)*uint16(rs.window[0]) + rs.a
-	} else if len(rs.window) > 0 {
-		rs.a += uint16(c)
-		rs.b += uint16(c) * uint16(len(rs.window))
-	} else {
-		rs.a = uint16(c)
-		rs.b = uint16(rs.size) * uint16(c)
-	}
+	rs.a += -uint16(rs.window[0]) + uint16(c)
+	rs.b += -uint16(rs.size)*uint16(rs.window[0]) + rs.a
 
 	rs.window = append(rs.window, c)
-	if len(rs.window) > rs.size {
-		rs.window = rs.window[1:]
-	}
+	rs.window = rs.window[1:]
+
 	return nil
 }
 
@@ -58,7 +52,7 @@ func (rs *RollingSum) BlockSize() int {
 }
 
 func (rs *RollingSum) Reset() {
-	rs.window = make([]byte, 0)
+	rs.window = make([]byte, rs.size)
 	rs.a, rs.b = 0, 0
 }
 

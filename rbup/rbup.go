@@ -56,5 +56,6 @@ func Split(r io.Reader, h Handler) (err error) {
 			return err
 		}
 	}
+
 	return nil
 }
