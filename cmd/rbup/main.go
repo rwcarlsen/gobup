@@ -58,9 +58,7 @@ func main() {
 
 			_, err = f.Seek(0, os.SEEK_SET)
 			fatalif(err)
-			if err := rbup.Split(f, h); err != nil {
-				log.Fatal(err)
-			}
+			fatalif(rbup.Split(f, h))
 		}
 		fatalif(f.Close())
 	}
