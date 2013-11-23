@@ -8,7 +8,11 @@ import (
 )
 
 var (
-	createTblsSql = []string{
+	initSql = []string{
+		"PRAGMA cache_size = 10000;",
+		"PRAGMA page_size = 4096;",
+		"PRAGMA temp_store = MEMORY;",
+		"PRAGMA synchronous = OFF;",
 		"CREATE TABLE IF NOT EXISTS objinfo (fid INTEGER,label TEXT,hash TEXT,modtime INTEGER);",
 		"CREATE TABLE IF NOT EXISTS chunks (hash TEXT,data BLOB);",
 		"CREATE TABLE IF NOT EXISTS objindex (fid INTEGER,chunkrow INTEGER);",
@@ -29,7 +33,7 @@ type ObjHeader struct {
 // InitDB creates database structure for storing chunked objects and indices.
 func InitDB(db *sql.DB) error {
 	// create tables
-	for _, sql := range createTblsSql {
+	for _, sql := range initSql {
 		_, err := db.Exec(sql)
 		if err != nil {
 			return err
