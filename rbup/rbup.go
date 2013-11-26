@@ -16,8 +16,6 @@ var (
 	BlockSize uint32 = 1024 * 32
 )
 
-var target = math.MaxUint32 / BlockSize
-
 // Handler is an interface for receiving a set of split file chunks from
 // the Split function.
 type Handler interface {
@@ -33,6 +31,8 @@ func Split(r io.Reader, h Handler) (err error) {
 			err = err2
 		}
 	}()
+
+	target := math.MaxUint32 / BlockSize
 
 	data := make([]byte, 0, BlockSize*2)
 	rh := rolling.New(Window)
