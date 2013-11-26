@@ -46,6 +46,10 @@ func main() {
 	}
 	defer db.Close()
 
+	err = db.BeginTransaction()
+	fatalif(err)
+	defer db.Commit()
+
 	if *list {
 		path := path.Join(kvback.HandlePrefix, flag.Arg(0))
 		enum, _, _ := db.Seek([]byte(path))

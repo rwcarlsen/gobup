@@ -10,11 +10,10 @@ import (
 	"github.com/rwcarlsen/gobup/rolling"
 )
 
-// configuration params
-var (
-	Window           = 256
-	BlockSize uint32 = 1024 * 32
-)
+const Window = 256
+
+// configuration param
+var BlockSize uint32 = 1024 * 32
 
 // Handler is an interface for receiving a set of split file chunks from
 // the Split function.
@@ -34,7 +33,7 @@ func Split(r io.Reader, h Handler) (err error) {
 
 	target := math.MaxUint32 / BlockSize
 
-	data := make([]byte, 0, BlockSize*2)
+	data := make([]byte, 0, BlockSize*4)
 	rh := rolling.New(Window)
 	buf := bufio.NewReader(r)
 	for {

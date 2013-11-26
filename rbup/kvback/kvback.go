@@ -173,6 +173,7 @@ func New(db *kv.DB, label string) (h *Handler, err error) {
 
 // Close writes the chunk index to the database.
 func (h *Handler) Close() error {
+	h.f.ObjId = h.fullH.Sum(nil)
 	if err := h.h.Update(h.f); err != nil {
 		return err
 	}
