@@ -1,19 +1,19 @@
 package main
 
 import (
-	"flag"
-	"path"
-	"io"
 	"bytes"
+	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime/pprof"
 
+	"github.com/cznic/kv"
 	"github.com/rwcarlsen/gobup/rbup"
 	"github.com/rwcarlsen/gobup/rbup/kvback"
-	"github.com/cznic/kv"
 )
 
 var dbpath = flag.String("db", filepath.Join(os.Getenv("HOME"), ".rbup.kv"), "database to dump data to")
@@ -21,14 +21,14 @@ var list = flag.Bool("list", false, "list all backups starting with given prefix
 var cpuprofile = flag.String("prof", "", "write cpu profile to file")
 
 func main() {
-	defer func(){
+	defer func() {
 		if r := recover(); r != nil {
 			log.Print(r)
 		}
 	}()
 	log.SetFlags(0)
 	flag.Parse()
-	rbup.BlockSize = 1024 * 4
+	rbup.BlockSize = 1024 * 8
 
 	if *cpuprofile != "" {
 		f, err := os.Create(*cpuprofile)
@@ -51,7 +51,7 @@ func main() {
 	defer db.Commit()
 
 	if *list {
-		path := path.Join(kvback.HandlePrefix, flag.Arg(0))
+		path := path.Join(kvback.TagsPrefix, flag.Arg(0))
 		enum, _, _ := db.Seek([]byte(path))
 		for {
 			key, _, err := enum.Next()
@@ -60,7 +60,7 @@ func main() {
 			}
 			fatalif(err)
 
-			if !bytes.HasPrefix(key, []byte(kvback.HandlePrefix)) {
+			if !bytes.HasPrefix(key, []byte(kvback.TagsPrefix)) {
 				break
 			}
 
@@ -74,7 +74,7 @@ func main() {
 		fatalif(err)
 		f, err := os.Open(fpath)
 		fatalif(err)
-		h, err := kvback.New(db, fpath)
+		h := kvback.New(db, fpath)
 		fatalif(err)
 		fatalif(rbup.Split(f, h))
 		fatalif(f.Close())

@@ -13,7 +13,7 @@ import (
 const Window = 256
 
 // configuration param
-var BlockSize uint32 = 1024 * 32
+var BlockSize uint32 = 1024 * 8
 
 // Handler is an interface for receiving a set of split file chunks from
 // the Split function.

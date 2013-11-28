@@ -1,77 +1,61 @@
-
 package kvback
 
 import (
 	"crypto/sha1"
+	"fmt"
 	"hash"
 	"io"
 	"path"
-	"time"
-	"errors"
-	"encoding/json"
 
 	"github.com/cznic/kv"
 )
 
-const HashName = "sha1"
+type Index [][]byte
 
-type File struct {
-	db *kv.DB
-	Label string
-	ObjId []byte // hash of object
-	ModTime time.Time
-	PrevVer []byte // hash of file
-	Index [][]byte // list of chunk ids
-}
-
-func NewFile(db *kv.DB, label string) *File {
-	return &File{
-		db: db,
-		Label: label,
-		ModTime: time.Now(),
-	}
-}
-
-func GetFile(db *kv.DB, fid []byte) (*File, error) {
-	fdata, err := db.Get(nil, fid)
+func LoadIndex(db *kv.DB, indexId []byte) (Index, error) {
+	data, err := ReadLarge(db, indexId)
 	if err != nil {
 		return nil, err
 	}
-	if fdata == nil {
-		return nil, errors.New("kvback: file does not exist")
+	idx := make([][]byte, 0, len(data)/sha1.Size)
+	for i := 0; i < len(data); i += sha1.Size {
+		idx = append(idx, data[i:i+sha1.Size])
 	}
-
-	f := &File{db: db}
-	if err := json.Unmarshal(fdata, &f); err != nil {
-		return nil, err
-	}
-	return f, nil
+	return idx, nil
 }
 
-func (f *File) AddChunk(id []byte) {
-	f.Index = append(f.Index, id)
+func (idx *Index) AddObj(objid []byte) {
+	*idx = append(*idx, objid)
 }
 
-func (f *File) Reader() io.Reader {
+func (idx Index) Save(db *kv.DB, key []byte) error {
+	data := make([]byte, 0, sha1.Size*len(idx))
+	for _, v := range idx {
+		data = append(data, v...)
+	}
+	return db.Set(key, data)
+}
+
+func (idx Index) ObjReader(db *kv.DB) io.Reader {
 	return &reader{
-		index: f.Index,
-		db: f.db,
+		idx: idx,
+		db:  db,
 	}
 }
 
 type reader struct {
-	index [][]byte
-	db *kv.DB
-	i int
+	idx Index
+	db  *kv.DB
+	i   int
 	buf []byte
 }
 
 func (r *reader) Read(data []byte) (n int, err error) {
-	if r.i == len(r.index) {
+	if r.i == len(r.idx) {
 		return 0, io.EOF
 	}
 	if len(r.buf) == 0 {
-		r.buf, err = r.db.Get(nil, r.index[r.i])
+		r.buf, err = r.db.Get(r.buf, r.idx[r.i])
 		if err != nil {
 			return 0, err
 		}
@@ -82,123 +66,113 @@ func (r *reader) Read(data []byte) (n int, err error) {
 	return n, nil
 }
 
-func (f *File) Prev() (*File, error) {
-	if f.PrevVer == nil {
-		return nil, errors.New("kvback: file has no previous version")
-	}
-	return GetFile(f.db, f.PrevVer)
-}
+type Object []byte
 
-func (f *File) Id() []byte {
+func (o *Object) Id() []byte {
 	h := sha1.New()
-	h.Write(f.Meta())
+	h.Write(*o)
 	return h.Sum(nil)
 }
-func (f *File) Meta() []byte {
-	data, err := json.Marshal(f)
-	if err != nil {
-		panic(err)
-	}
-	return data
-}
 
-const HandlePrefix = "handles"
+const maxSize = 65000
 
-type Handle struct {
-	db *kv.DB
-	f *File
-	key []byte
-}
-
-func NewHandle(db *kv.DB, label string) (h *Handle, err error) {
-	h = &Handle{
-		db: db,
-		key: []byte(path.Join(HandlePrefix, label)),
-	}
-
-	fid, err := db.Get(nil, h.key)
-	if err == nil && fid != nil {
-		h.f, err = GetFile(db, fid)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return h, nil
-}
-
-func (h *Handle) Head() (*File, error) {
-	if h.f == nil {
-		return nil, errors.New("kvback: handle has no associated files")
-	}
-	return h.f, nil
-}
-
-func (h *Handle) Update(f *File) error {
-	if h.f != nil {
-		f.PrevVer = h.f.Id() // chain version history
-	}
-	h.f = f
-
-	if err := h.db.Set(h.f.Id(), h.f.Meta()); err != nil {
-		return err
-	}
-	if err := h.db.Set(h.key, h.f.Id()); err != nil {
-		return err
-	}
-	return nil
-}
-
-// Handler implements the rbup.Handler interface for storing split files in a
-// kv database.
-type Handler struct {
-	h        *Handle
-	f *File
-	fullH        hash.Hash
-	chunkH       hash.Hash
-	db           *kv.DB
-}
-
-// Create a new handler dumping data chunks and index info to db for an
-// object/file identified by label.
-func New(db *kv.DB, label string) (h *Handler, err error) {
-	// config and return handler
-	h = &Handler{db: db, fullH: sha1.New(), chunkH: sha1.New()}
-	h.h, err = NewHandle(db, label)
-	if err != nil {
+func ReadLarge(db *kv.DB, key []byte) (val []byte, err error) {
+	enum, hit, err := db.Seek(key)
+	if !hit {
+		return nil, fmt.Errorf("kvback: key %x not found", key)
+	} else if err != nil {
 		return nil, err
 	}
-	h.f = NewFile(db, label)
-	return h, nil
-}
 
-// Close writes the chunk index to the database.
-func (h *Handler) Close() error {
-	h.f.ObjId = h.fullH.Sum(nil)
-	if err := h.h.Update(h.f); err != nil {
-		return err
+	if _, val, err = enum.Next(); err != nil && len(val) < maxSize {
+		return val, nil // object is only a single val
 	}
-	return nil
+	var tot []byte
+	for _, val, err = enum.Next(); err == nil; _, val, err = enum.Next() {
+		tot = append(tot, val...)
+		if len(val) < maxSize {
+			return tot, nil
+		}
+	}
+	if err != nil && err != io.EOF {
+		return nil, err
+	}
+	return tot, nil
 }
 
-// Write stores chunk in a hash-named file in the archive's dst directory.
-func (h *Handler) Write(chunk []byte) (n int, err error) {
-	// get chunk hashsum
-	h.chunkH.Reset()
-	h.chunkH.Write(chunk)
-	h.fullH.Write(chunk)
+func WriteLarge(db *kv.DB, key, val []byte) (err error) {
+	if len(val) <= maxSize {
+		return db.Set(key, val)
+	}
 
-	key := h.chunkH.Sum(nil)
-	h.f.AddChunk(key)
-
-	_, _, err = h.db.Put(nil, key, func(key, old []byte) (new []byte, write bool, err error) {
+	exists := true
+	_, _, err = db.Put(nil, key, func(key, old []byte) (new []byte, write bool, err error) {
 		if old == nil {
-			return chunk, true, nil
+			exists = false
+			return val[:maxSize], true, nil
 		}
 		return nil, false, nil
 	})
 	if err != nil {
-		return 0, err
+		return err
 	}
-	return len(chunk), nil
+	if exists {
+		return nil
+	}
+
+	currkey := append(key, 1)
+	i := 0
+	for i = maxSize; i < len(val)-maxSize; i += maxSize {
+		if err := db.Set(currkey, val[i:i+maxSize]); err != nil {
+			return err
+		}
+		if currkey[len(currkey)-1] < 255 {
+			currkey[len(currkey)-1] += 1
+		} else {
+			currkey = append(currkey, 1)
+		}
+	}
+	return db.Set(currkey, val[i:])
 }
 
+const TagsPrefix = "tags"
+
+// Handler implements the rbup.Handler interface for storing split files in a
+// kv database.
+type Handler struct {
+	fullH  hash.Hash
+	chunkH hash.Hash
+	idx    Index
+	db     *kv.DB
+	tag    string
+}
+
+// Create a new handler dumping data chunks and index info to db for an
+// object/file identified by label.
+func New(db *kv.DB, tag string) *Handler {
+	return &Handler{db: db, fullH: sha1.New(), chunkH: sha1.New(), tag: tag}
+}
+
+// Close writes the chunk index to the database.
+func (h *Handler) Close() error {
+	indexId := h.fullH.Sum(nil)
+	if err := h.idx.Save(h.db, indexId); err != nil {
+		return err
+	}
+	key := []byte(path.Join(TagsPrefix, h.tag))
+	return h.db.Set(key, indexId)
+}
+
+// Write stores chunk in a hash-named file in the archive's dst directory.
+func (h *Handler) Write(chunk []byte) (n int, err error) {
+	h.chunkH.Reset()
+	h.chunkH.Write(chunk)
+	h.fullH.Write(chunk)
+
+	objid := h.chunkH.Sum(nil)
+	if err := WriteLarge(h.db, objid, chunk); err != nil {
+		return 0, err
+	}
+	h.idx.AddObj(objid)
+	return len(chunk), nil
+}
