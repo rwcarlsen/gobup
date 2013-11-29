@@ -33,7 +33,7 @@ func (idx Index) Save(db *kv.DB, key []byte) error {
 	for _, v := range idx {
 		data = append(data, v...)
 	}
-	return db.Set(key, data)
+	return WriteLarge(db, key, data)
 }
 
 func (idx Index) ObjReader(db *kv.DB) io.Reader {
@@ -74,7 +74,7 @@ func (o *Object) Id() []byte {
 	return h.Sum(nil)
 }
 
-const maxSize = 65000
+const maxSize = 65786
 
 func ReadLarge(db *kv.DB, key []byte) (val []byte, err error) {
 	enum, hit, err := db.Seek(key)
