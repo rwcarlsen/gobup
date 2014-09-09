@@ -2,33 +2,35 @@
 // algorithm.
 package rolling
 
-import (
-	"encoding/binary"
+import "math"
+
+const (
+	DefaultWindow = 64
+	DefaultSplit  = 1024 * 8
 )
 
-type RollingSum struct {
+type Rollsum struct {
 	a      uint16
 	b      uint16
 	window []byte
 	size   int
 	i      int
+	target uint32
 }
 
-func New(window int) *RollingSum {
-	return &RollingSum{
+func New(window, splitlen int) *Rollsum {
+	return &Rollsum{
 		window: make([]byte, window),
 		size:   window,
+		target: math.MaxUint32 / uint32(splitlen),
 	}
 }
 
-func (rs *RollingSum) Write(data []byte) (n int, err error) {
-	for _, c := range data {
-		rs.WriteByte(c)
-	}
-	return len(data), nil
+func (rs *Rollsum) OnSplit() bool {
+	return rs.Sum() < rs.target
 }
 
-func (rs *RollingSum) WriteByte(c byte) error {
+func (rs *Rollsum) WriteByte(c byte) error {
 	rs.a += -uint16(rs.window[rs.i]) + uint16(c)
 	rs.b += -uint16(rs.size)*uint16(rs.window[rs.i]) + rs.a
 
@@ -40,25 +42,19 @@ func (rs *RollingSum) WriteByte(c byte) error {
 	return nil
 }
 
-func (rs *RollingSum) Sum32() uint32 {
+func (rs *Rollsum) Sum() uint32 {
 	return uint32(rs.a) | (uint32(rs.b) << 16)
 }
 
-func (rs *RollingSum) Size() int {
+func (rs *Rollsum) Size() int {
 	return 4
 }
 
-func (rs *RollingSum) BlockSize() int {
+func (rs *Rollsum) BlockSize() int {
 	return 1
 }
 
-func (rs *RollingSum) Reset() {
+func (rs *Rollsum) Reset() {
 	rs.window = make([]byte, rs.size)
 	rs.a, rs.b = 0, 0
-}
-
-func (rs *RollingSum) Sum(b []byte) []byte {
-	data := make([]byte, 4)
-	binary.BigEndian.PutUint32(data, rs.Sum32())
-	return append(b, data...)
 }

@@ -3,20 +3,24 @@ package rolling
 import (
 	"crypto/rand"
 	"io"
-	"math"
 	"testing"
 )
 
 func TestRandom(t *testing.T) {
 	window := 256
-	var blockSize uint32 = 1024 * 32
-	var target uint32 = math.MaxUint32 / blockSize
+	blockSize := 1024 * 4
 
-	rs := New(window)
-	for i := 0; i < 100000; i++ {
-		io.CopyN(rs, rand.Reader, 1)
-		if rs.Sum32() < target {
-			t.Logf("sum at %v<target: %v, ratio=%v", i, rs.Sum32(), float64(rs.Sum32())/float64(1<<32))
+	rs := New(window, blockSize)
+	data := make([]byte, 1)
+	for i := 0; i < 10000; i++ {
+		_, err := io.ReadFull(rand.Reader, data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rs.WriteByte(data[0])
+
+		if rs.OnSplit() {
+			t.Logf("sum at %v<target: %v, ratio=%v", i, rs.Sum(), float64(rs.Sum())/float64(1<<32))
 		}
 	}
 }
@@ -26,11 +30,11 @@ func TestRollingSum(t *testing.T) {
 	data2 := []byte("hello my name is joe and I eat in a button factory")
 	window := 8
 
-	rs := New(window)
+	rs := New(window, DefaultSplit)
 	sums1 := []uint32{}
 	for i, c := range data1 {
 		rs.WriteByte(c)
-		sums1 = append(sums1, rs.Sum32())
+		sums1 = append(sums1, rs.Sum())
 		t.Logf("sum1 at %v: %v", i, sums1[i])
 	}
 
@@ -38,7 +42,7 @@ func TestRollingSum(t *testing.T) {
 	sums2 := []uint32{}
 	for _, c := range data2 {
 		rs.WriteByte(c)
-		sums2 = append(sums2, rs.Sum32())
+		sums2 = append(sums2, rs.Sum())
 	}
 
 	for i := 0; i < 27; i++ {
