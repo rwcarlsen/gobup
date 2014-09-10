@@ -4,8 +4,8 @@ package rolling
 
 import "math"
 
-const DefaultWindow = 64
-
+const window = 64
+const avgsplit = 8 * 1024
 const charOffset = 31
 
 type Rollsum struct {
@@ -16,7 +16,9 @@ type Rollsum struct {
 	target  uint32
 }
 
-func New(window, splitlen int) *Rollsum {
+func New() *Rollsum { return NewCustom(window, avgsplit) }
+
+func NewCustom(window, splitlen int) *Rollsum {
 	return &Rollsum{
 		s1:      uint32(window * charOffset),
 		s2:      uint32(window * (window - 1) * charOffset),
@@ -26,9 +28,9 @@ func New(window, splitlen int) *Rollsum {
 	}
 }
 
-func (rs *Rollsum) OnSplit() bool {
-	return rs.Sum() < rs.target
-}
+func (rs *Rollsum) OnSplit() bool { return rs.Sum() < rs.target }
+
+func (rs *Rollsum) Sum() uint32 { return (rs.s1 << 16) | (rs.s2 & 0xffff) }
 
 func (rs *Rollsum) WriteByte(ch byte) error {
 	drop := rs.window[rs.i]
@@ -39,8 +41,4 @@ func (rs *Rollsum) WriteByte(ch byte) error {
 	rs.i = (rs.i + 1) % rs.winsize
 
 	return nil
-}
-
-func (rs *Rollsum) Sum() uint32 {
-	return (rs.s1 << 16) | (rs.s2 & 0xffff)
 }

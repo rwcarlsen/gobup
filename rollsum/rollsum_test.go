@@ -10,7 +10,7 @@ func TestRandom(t *testing.T) {
 	window := 256
 	blockSize := 1024 * 4
 
-	rs := New(window, blockSize)
+	rs := NewCustom(window, blockSize)
 	data := make([]byte, 1)
 	for i := 0; i < 10000; i++ {
 		_, err := io.ReadFull(rand.Reader, data)
@@ -30,14 +30,14 @@ func TestRollingSum(t *testing.T) {
 	data2 := []byte("hello my name is joe and I eat in a button factory")
 	window := 8
 
-	rs := New(window, 8*1024)
+	rs := NewCustom(window, 8*1024)
 	sums1 := []uint32{}
 	for _, c := range data1 {
 		rs.WriteByte(c)
 		sums1 = append(sums1, rs.Sum())
 	}
 
-	rs = New(window, 8*1024)
+	rs = NewCustom(window, 8*1024)
 	sums2 := []uint32{}
 	for _, c := range data2 {
 		rs.WriteByte(c)
