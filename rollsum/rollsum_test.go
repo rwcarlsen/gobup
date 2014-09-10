@@ -30,15 +30,14 @@ func TestRollingSum(t *testing.T) {
 	data2 := []byte("hello my name is joe and I eat in a button factory")
 	window := 8
 
-	rs := New(window, DefaultSplit)
+	rs := New(window, 8*1024)
 	sums1 := []uint32{}
-	for i, c := range data1 {
+	for _, c := range data1 {
 		rs.WriteByte(c)
 		sums1 = append(sums1, rs.Sum())
-		t.Logf("sum1 at %v: %v", i, sums1[i])
 	}
 
-	rs.Reset()
+	rs = New(window, 8*1024)
 	sums2 := []uint32{}
 	for _, c := range data2 {
 		rs.WriteByte(c)
@@ -51,11 +50,11 @@ func TestRollingSum(t *testing.T) {
 		}
 	}
 
-	for i := 0; i < 13; i++ {
-		i1 := len(sums1) - i - 1
-		i2 := len(sums2) - i - 1
+	for i := 1; i < 14; i++ {
+		i1 := len(sums1) - i
+		i2 := len(sums2) - i
 		if sums1[i1] != sums2[i2] {
-			t.Errorf("post sums %v don't match, %v != %v", i, sums1[i1], sums2[i2])
+			t.Errorf("post sums %v don't match, %v != %v", i-1, sums1[i1], sums2[i2])
 		}
 	}
 }

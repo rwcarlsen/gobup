@@ -5,36 +5,22 @@ package rbup
 import (
 	"bufio"
 	"io"
-	"math"
-
-	"github.com/rwcarlsen/gobup/rolling"
 )
 
-const Window = 256
-
-// configuration param
-var BlockSize uint32 = 1024 * 8
+const winsize = rollsum.DefaultWindow
 
 // Handler is an interface for receiving a set of split file chunks from
 // the Split function.
 type Handler interface {
-	io.WriteCloser
+	io.Writer
 }
 
 // Split splits the data in r into several chunks that are passed to h for
 // handling.  The process is aborted returning an error if h.Write returns
 // an error.
-func Split(r io.Reader, h Handler) (err error) {
-	defer func() {
-		if err2 := h.Close(); err == nil {
-			err = err2
-		}
-	}()
-
-	target := math.MaxUint32 / BlockSize
-
-	data := make([]byte, 0, BlockSize*4)
-	rh := rolling.New(Window)
+func Split(r io.Reader, h Handler, rs RollSum) error {
+	data := make([]byte, 0, avgBlock*4)
+	rh := rollsum.New(winsize, avgBlock)
 	buf := bufio.NewReader(r)
 	for {
 		c, err := buf.ReadByte()
@@ -44,7 +30,7 @@ func Split(r io.Reader, h Handler) (err error) {
 		data = append(data, c)
 
 		rh.WriteByte(c)
-		if rh.Sum32() < target && len(data) >= Window {
+		if rh.OnSplit() && len(data) >= winsize {
 			if _, err := h.Write(data); err != nil {
 				return err
 			}

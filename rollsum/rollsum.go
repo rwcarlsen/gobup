@@ -4,25 +4,25 @@ package rolling
 
 import "math"
 
-const (
-	DefaultWindow = 64
-	DefaultSplit  = 1024 * 8
-)
+const DefaultWindow = 64
+
+const charOffset = 31
 
 type Rollsum struct {
-	a      uint16
-	b      uint16
-	window []byte
-	size   int
-	i      int
-	target uint32
+	s1, s2  uint32
+	window  []byte
+	winsize int
+	i       int
+	target  uint32
 }
 
 func New(window, splitlen int) *Rollsum {
 	return &Rollsum{
-		window: make([]byte, window),
-		size:   window,
-		target: math.MaxUint32 / uint32(splitlen),
+		s1:      uint32(window * charOffset),
+		s2:      uint32(window * (window - 1) * charOffset),
+		window:  make([]byte, window),
+		winsize: window,
+		target:  math.MaxUint32 / uint32(splitlen),
 	}
 }
 
@@ -30,31 +30,17 @@ func (rs *Rollsum) OnSplit() bool {
 	return rs.Sum() < rs.target
 }
 
-func (rs *Rollsum) WriteByte(c byte) error {
-	rs.a += -uint16(rs.window[rs.i]) + uint16(c)
-	rs.b += -uint16(rs.size)*uint16(rs.window[rs.i]) + rs.a
+func (rs *Rollsum) WriteByte(ch byte) error {
+	drop := rs.window[rs.i]
+	rs.s1 += uint32(ch) - uint32(drop)
+	rs.s2 += rs.s1 - uint32(rs.winsize)*uint32(drop+charOffset)
 
-	rs.window[rs.i] = c
-	if rs.i++; rs.i == rs.size {
-		rs.i = 0
-	}
+	rs.window[rs.i] = ch
+	rs.i = (rs.i + 1) % rs.winsize
 
 	return nil
 }
 
 func (rs *Rollsum) Sum() uint32 {
-	return uint32(rs.a) | (uint32(rs.b) << 16)
-}
-
-func (rs *Rollsum) Size() int {
-	return 4
-}
-
-func (rs *Rollsum) BlockSize() int {
-	return 1
-}
-
-func (rs *Rollsum) Reset() {
-	rs.window = make([]byte, rs.size)
-	rs.a, rs.b = 0, 0
+	return (rs.s1 << 16) | (rs.s2 & 0xffff)
 }
