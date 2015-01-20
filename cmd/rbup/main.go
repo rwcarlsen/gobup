@@ -14,6 +14,7 @@ import (
 	"github.com/cznic/kv"
 	"github.com/rwcarlsen/gobup/rbup"
 	"github.com/rwcarlsen/gobup/rbup/kvback"
+	"github.com/rwcarlsen/gobup/rollsum"
 )
 
 var dbpath = flag.String("db", filepath.Join(os.Getenv("HOME"), ".rbup.kv"), "database to dump data to")
@@ -28,7 +29,6 @@ func main() {
 	}()
 	log.SetFlags(0)
 	flag.Parse()
-	rbup.BlockSize = 1024 * 8
 
 	if *cpuprofile != "" {
 		f, err := os.Create(*cpuprofile)
@@ -76,7 +76,9 @@ func main() {
 		fatalif(err)
 		h := kvback.New(db, fpath)
 		fatalif(err)
-		fatalif(rbup.Split(f, h))
+
+		rs := rollsum.NewCustom(rollsum.DefaultWindow, 1024*8)
+		fatalif(rbup.Split(f, rs, h))
 		fatalif(f.Close())
 	}
 }

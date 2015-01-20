@@ -5,6 +5,8 @@ package rbup
 import (
 	"bufio"
 	"io"
+
+	"github.com/rwcarlsen/gobup/rollsum"
 )
 
 const minchunk = 64
@@ -18,8 +20,8 @@ type Handler interface {
 // Split splits the data in r into several chunks that are passed to h for
 // handling.  The process is aborted returning an error if h.Write returns
 // an error.
-func Split(r io.Reader, rs *rollsum.RollSum, h Handler) error {
-	data := make([]byte, 0, avgBlock*4)
+func Split(r io.Reader, rs *rollsum.Rollsum, h Handler) error {
+	data := make([]byte, 0, rollsum.DefaultSplitAvg*4)
 	buf := bufio.NewReader(r)
 	for {
 		c, err := buf.ReadByte()

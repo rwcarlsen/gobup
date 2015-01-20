@@ -1,4 +1,4 @@
-package rolling
+package rollsum
 
 import (
 	"crypto/rand"

@@ -3,6 +3,8 @@ package rbup
 import (
 	"bytes"
 	"testing"
+
+	"github.com/rwcarlsen/gobup/rollsum"
 )
 
 type testHandler []int
@@ -15,10 +17,10 @@ func (h *testHandler) Write(chunk []byte) (int, error) {
 
 func TestSplit(t *testing.T) {
 	seed := []byte("three score and seven years ago I was eating much food and then\n the tree ran away from the spoon and the little hog rolled around in the mud and then the cheese kept eating much food and many zoo visits")
-	data := bytes.Repeat(seed, int(BlockSize)*25/len(seed))
+	data := bytes.Repeat(seed, int(rollsum.DefaultSplitAvg)*25/len(seed))
 
 	expected := []int{
-		819105,
+		204624,
 		78891,
 		1582,
 		22427,
@@ -38,28 +40,28 @@ func TestSplit(t *testing.T) {
 
 	th := &testHandler{}
 
-	err := Split(bytes.NewBuffer(data), th)
+	err := Split(bytes.NewBuffer(data), rollsum.New(), th)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	for i, n := range *th {
 		if n != expected[i] {
-			t.Errorf("length expected %v, got %v", expected[i], n)
+			t.Errorf("block %v length: expected %v, got %v", i+1, expected[i], n)
 		}
 	}
 }
 
 func TestArchive(t *testing.T) {
 	seed := []byte("three score and seven years ago I was eating much food and then\n the tree ran away from the spoon and the little hog rolled around in the mud and then the cheese kept eating much food and many zoo visits")
-	data := bytes.Repeat(seed, int(BlockSize)*25/len(seed))
+	data := bytes.Repeat(seed, int(rollsum.DefaultSplitAvg)*25/len(seed))
 
 	a, err := NewArchiver("test-file", "test-dir")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = Split(bytes.NewBuffer(data), a)
+	err = Split(bytes.NewBuffer(data), rollsum.New(), a)
 	if err != nil {
 		t.Fatal(err)
 	}

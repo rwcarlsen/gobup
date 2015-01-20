@@ -1,11 +1,11 @@
 // Package rolling implements a 32 bit rolling checksum similar to rsync's
 // algorithm.
-package rolling
+package rollsum
 
 import "math"
 
-const window = 64
-const avgsplit = 8 * 1024
+const DefaultWindow = 64
+const DefaultSplitAvg = 8 * 1024
 const charOffset = 31
 
 type Rollsum struct {
@@ -16,7 +16,7 @@ type Rollsum struct {
 	target  uint32
 }
 
-func New() *Rollsum { return NewCustom(window, avgsplit) }
+func New() *Rollsum { return NewCustom(DefaultWindow, DefaultSplitAvg) }
 
 func NewCustom(window, splitlen int) *Rollsum {
 	return &Rollsum{
