@@ -1,23 +1,32 @@
 package main
 
 import (
-	"database/sql"
+	"bytes"
 	"flag"
+	"fmt"
+	"io"
 	"log"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime/pprof"
-	"time"
 
-	_ "code.google.com/p/go-sqlite/go1/sqlite3"
+	"github.com/cznic/kv"
 	"github.com/rwcarlsen/gobup/rbup"
-	"github.com/rwcarlsen/gobup/rbup/sqlback"
+	"github.com/rwcarlsen/gobup/rbup/kvback"
+	"github.com/rwcarlsen/gobup/rollsum"
 )
 
-var dbpath = flag.String("db", filepath.Join(os.Getenv("HOME"), ".rbup.sqlite"), "database to dump data to")
+var dbpath = flag.String("db", filepath.Join(os.Getenv("HOME"), ".rbup.kv"), "database to dump data to")
+var list = flag.Bool("list", false, "list all backups starting with given prefix")
 var cpuprofile = flag.String("prof", "", "write cpu profile to file")
 
 func main() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Print(r)
+		}
+	}()
 	log.SetFlags(0)
 	flag.Parse()
 
@@ -30,42 +39,52 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	db, err := sql.Open("sqlite3", *dbpath)
-	fatalif(err)
+	db, err := kv.Create(*dbpath, &kv.Options{})
+	if err != nil {
+		db, err = kv.Open(*dbpath, &kv.Options{})
+		fatalif(err)
+	}
 	defer db.Close()
-	fatalif(sqlback.InitDB(db))
-	tx, err := db.Begin()
+
+	err = db.BeginTransaction()
 	fatalif(err)
-	defer tx.Commit()
+	defer db.Commit()
+
+	if *list {
+		path := path.Join(kvback.TagsPrefix, flag.Arg(0))
+		enum, _, _ := db.Seek([]byte(path))
+		for {
+			key, _, err := enum.Next()
+			if err == io.EOF {
+				break
+			}
+			fatalif(err)
+
+			if !bytes.HasPrefix(key, []byte(kvback.TagsPrefix)) {
+				break
+			}
+
+			fmt.Printf("%s\n", key)
+		}
+		return
+	}
 
 	for _, fname := range flag.Args() {
 		fpath, err := filepath.Abs(fname)
 		fatalif(err)
 		f, err := os.Open(fpath)
 		fatalif(err)
-
-		info, err := sqlback.GetHeader(tx, f)
+		h := kvback.New(db, fpath)
 		fatalif(err)
-		if info != nil {
-			if info.Label != fpath {
-				info.Label = fpath
-				info.ModTime = time.Now()
-				fatalif(sqlback.PutHeader(tx, info))
-			}
-		} else {
-			h, err := sqlback.New(tx, fpath)
-			fatalif(err)
 
-			_, err = f.Seek(0, os.SEEK_SET)
-			fatalif(err)
-			fatalif(rbup.Split(f, h))
-		}
+		rs := rollsum.NewCustom(rollsum.DefaultWindow, 1024*8)
+		fatalif(rbup.Split(f, rs, h))
 		fatalif(f.Close())
 	}
 }
 
 func fatalif(err error) {
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 }

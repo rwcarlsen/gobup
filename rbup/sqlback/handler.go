@@ -7,9 +7,6 @@ import (
 	"database/sql"
 	"fmt"
 	"hash"
-	"io"
-	"io/ioutil"
-	"path/filepath"
 	"time"
 )
 
@@ -107,30 +104,3 @@ func (h *Handler) Write(chunk []byte) (n int, err error) {
 	return len(chunk), nil
 }
 
-// reader is a special io.Reader that gradually returns bytes from all the
-// objects for a split file chunk by chunk.
-type reader struct {
-	dst      string
-	indx     []string
-	buf      []byte
-	objIndex int
-}
-
-func (r *reader) Read(data []byte) (n int, err error) {
-	if r.objIndex == len(r.indx) {
-		return 0, io.EOF
-	}
-
-	if len(r.buf) == 0 {
-		fpath := filepath.Join(r.dst, r.indx[r.objIndex])
-		r.buf, err = ioutil.ReadFile(fpath)
-		if err != nil {
-			return 0, err
-		}
-		r.objIndex++
-	}
-
-	n = copy(data, r.buf)
-	r.buf = r.buf[n:]
-	return n, nil
-}
